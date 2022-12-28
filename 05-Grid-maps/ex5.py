@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import bresenham as bh
 
+show_animation = False
 
 def plot_gridmap(gridmap):
     gridmap = np.array(gridmap, dtype=np.float64)
@@ -91,7 +92,6 @@ def inv_sensor_model(cell, endpoint, prob_occ, prob_free):
     prob_values.append(prob_occ)
     prob_values = np.array(prob_values).reshape((len(line), 1))
     inv_sensor_model = np.hstack((line, prob_values))
-
     return inv_sensor_model
 
 
@@ -104,24 +104,57 @@ def grid_mapping_with_known_poses(ranges_raw, poses_raw, occ_gridmap, map_res, p
 
     # Given Sensor range value for every pose
     for i in range(poses.shape[0]):
-        ranges = ranges2cells(
-            ranges_raw[i], poses_raw[i], occ_gridmap, map_res).transpose()
+        ranges = ranges2cells(ranges_raw[i], poses_raw[i], occ_gridmap, map_res).transpose()
 
         # update the probability within the senor range.
         for j in range(ranges.shape[0]):
-            inv_sensor_val = inv_sensor_model(
-                poses[i], ranges[j], prob_occ, prob_free)
+            inv_sensor_val = inv_sensor_model(poses[i], ranges[j], prob_occ, prob_free)
 
             # Update the cell
             for k in range(len(inv_sensor_val)):
-                cell = np.array(
-                    [[int(inv_sensor_val[k][0]), int(inv_sensor_val[k][1])]])
+                cell = np.array([[int(inv_sensor_val[k][0]), int(inv_sensor_val[k][1])]])
 
                 # update the grid map by converting probiblity output from the sensor to logvalue and add it to grid value.
                 occ_gridmap[cell[0][0]][cell[0][1]] = occ_gridmap[cell[0][0]][cell[0][1]] + prob2logodds(
                     inv_sensor_val[k][2]) - prob2logodds(prior)
 
+        if show_animation:
+            plt.cla()
+            # for stopping simulation with the esc key.
+            plt.gcf().canvas.mpl_connect('key_release_event',
+                lambda event: [exit(0) if event.key == 'escape' else None])
+
+            gridmap = logodds2prob(occ_gridmap)
+            gridmap = np.array(gridmap, dtype=np.float64)
+            plt.imshow(gridmap, cmap='Greys', vmin=0, vmax=1)
+            plt.plot(poses[:i, 1], poses[:i, 0], '-b', alpha=0.5, label='trajectory', linewidth=1)
+            plt.scatter(poses[i, 1], poses[i, 0], c='g', s=20, marker='o')
+            plt.scatter(ranges[:, 1], ranges[:, 0], c='r', s=0.5)
+            plt.pause(0.001)
+
     # The cell value are converted back probability.
     occ_gridmap = logodds2prob(occ_gridmap)
 
     return occ_gridmap
+
+if __name__ == "__main__":
+    show_animation = True
+
+    map_size = 100
+    map_res = 0.25
+
+    prior = 0.50
+    prob_occ = 0.90
+    prob_free = 0.35
+
+    ranges_raw = np.loadtxt("data/ranges.data", delimiter=',', dtype='float')
+    poses_raw = np.loadtxt("data/poses.data", delimiter=',', dtype='float')
+
+    # initialize gridmap
+    occ_gridmap = init_gridmap(map_size, map_res)+prior
+
+    plt.figure()
+
+    gridmap = grid_mapping_with_known_poses(ranges_raw, poses_raw, occ_gridmap, map_res, prob_occ, prob_free, prior)
+    plot_gridmap(gridmap)
+    plt.show()
