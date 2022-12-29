@@ -46,8 +46,8 @@ def ranges2points(ranges):
     # 2D points
     angles = np.linspace(start_angle, start_angle +
                          (num_beams*angular_res), num_beams)[idx]
-    points = np.array([np.multiply(ranges[idx], np.cos(angles)),
-                       np.multiply(ranges[idx], np.sin(angles))])
+    points = np.array([ranges[idx]*np.cos(angles),
+                       ranges[idx]*np.sin(angles)])
     # homogeneous points
     points_hom = np.append(points, np.ones((1, points.shape[1])), axis=0)
     return points_hom
@@ -57,7 +57,7 @@ def ranges2cells(r_ranges, w_pose, gridmap, map_res):
     # ranges to points
     r_points = ranges2points(r_ranges)
     w_P = v2t(w_pose)
-    w_points = np.matmul(w_P, r_points)
+    w_points = w_P@r_points
     # covert to map frame
     m_points = world2map(w_points, gridmap, map_res)
     m_points = m_points[0:2, :]
@@ -111,12 +111,11 @@ def grid_mapping_with_known_poses(ranges_raw, poses_raw, occ_gridmap, map_res, p
             inv_sensor_val = inv_sensor_model(poses[i], ranges[j], prob_occ, prob_free)
 
             # Update the cell
-            for k in range(len(inv_sensor_val)):
-                cell = np.array([[int(inv_sensor_val[k][0]), int(inv_sensor_val[k][1])]])
-
-                # update the grid map by converting probiblity output from the sensor to logvalue and add it to grid value.
-                occ_gridmap[cell[0][0]][cell[0][1]] = occ_gridmap[cell[0][0]][cell[0][1]] + prob2logodds(
-                    inv_sensor_val[k][2]) - prob2logodds(prior)
+            for cell in inv_sensor_val:
+                x, y, prob = cell
+                # update the grid map by converting probiblity output
+                # from the sensor to logvalue and add it to grid value.
+                occ_gridmap[int(x), int(y)] += prob2logodds(prob) - prob2logodds(prior)
 
         if show_animation:
             plt.cla()
